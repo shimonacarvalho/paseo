@@ -48,7 +48,7 @@ export const ScheduleRunSchema = z.object({
   scheduledFor: z.string(),
   startedAt: z.string(),
   endedAt: z.string().nullable(),
-  status: z.enum(["running", "succeeded", "failed"]),
+  status: z.enum(["running", "succeeded", "failed", "skipped"]),
   agentId: z.guid().nullable(),
   workspaceId: z.string().nullable().optional(),
   output: z.string().nullable(),
@@ -62,6 +62,12 @@ export const StoredScheduleSchema = z.object({
   prompt: z.string().min(1),
   cadence: ScheduleCadenceSchema,
   target: ScheduleTargetSchema,
+  // Optional shell command run before each run decides to create a worktree or
+  // start an agent. A non-zero exit code skips the run silently (no workspace,
+  // no agent, no notification), recorded as a "skipped" run. Runs in the
+  // schedule's cwd. Optional so schedules stored before this field (and existing
+  // fixtures) still parse; writers set it to null when absent.
+  gate: z.string().min(1).nullable().optional(),
   status: ScheduleStatusSchema,
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -84,6 +90,7 @@ export interface CreateScheduleInput {
   prompt: string;
   cadence: ScheduleCadence;
   target: ScheduleTarget;
+  gate?: string | null;
   maxRuns?: number | null;
   expiresAt?: string | null;
   runOnCreate?: boolean | null;
@@ -105,6 +112,7 @@ export interface UpdateScheduleInput {
   prompt?: string;
   cadence?: ScheduleCadence;
   newAgentConfig?: UpdateScheduleNewAgentConfig;
+  gate?: string | null;
   maxRuns?: number | null;
   expiresAt?: string | null;
 }

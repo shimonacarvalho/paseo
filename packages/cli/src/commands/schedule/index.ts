@@ -34,6 +34,10 @@ export function createScheduleCommand(): Command {
       )
       .option("--thinking <id>", "Thinking option ID for new-agent runs")
       .option("--cwd <path>", "Working directory (default: current; required with --host)")
+      .option(
+        "--gate <command>",
+        "Shell command run in the schedule's cwd before each run; a non-zero exit skips the run silently (no worktree, no agent, no notification)",
+      )
       .option("--run-now", "Fire one immediate run on creation")
       .option("--max-runs <n>", "Maximum number of runs")
       .option("--expires-in <duration>", "Time to live for the schedule"),
@@ -93,6 +97,11 @@ export function createScheduleCommand(): Command {
       .option("--model <model>", "New agent model (only for new-agent target)")
       .option("--mode <mode>", "New agent provider mode (only for new-agent target)")
       .option("--cwd <path>", "New working directory (only for new-agent target)")
+      .option(
+        "--gate <command>",
+        "Set or change the gate command run before each run (non-zero exit skips the run silently)",
+      )
+      .option("--no-gate", "Clear the gate command")
       .option("--max-runs <n>", "Set or change maximum number of runs")
       .option("--no-max-runs", "Clear the max-runs limit")
       .option("--expires-in <duration>", "Set or change time to live for the schedule")

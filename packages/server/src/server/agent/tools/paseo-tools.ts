@@ -400,6 +400,7 @@ interface ScheduleUpdateToolInput {
   model?: string | null;
   mode?: string | null;
   cwd?: string;
+  gate?: string | null;
   expiresIn?: string;
   clearExpires?: boolean;
 }
@@ -540,6 +541,7 @@ function buildScheduleUpdateInput(input: ScheduleUpdateToolInput): UpdateSchedul
     ...(input.name !== undefined ? { name: input.name } : {}),
     ...(input.prompt !== undefined ? { prompt: input.prompt } : {}),
     ...(cadence !== undefined ? { cadence } : {}),
+    ...(input.gate !== undefined ? { gate: input.gate } : {}),
     ...(input.maxRuns !== undefined ? { maxRuns: input.maxRuns } : {}),
     ...(expiresAt !== undefined ? { expiresAt } : {}),
     ...(Object.keys(newAgentConfig).length > 0 ? { newAgentConfig } : {}),
@@ -2687,13 +2689,32 @@ function createToolCatalog(
           ),
           cwd: z.string().optional(),
           isolation: z.enum(["local", "worktree"]).optional(),
+        gate: z
+          .string()
+          .trim()
+          .min(1)
+          .optional()
+          .describe(
+            "Shell command run in the schedule's cwd before each run. A non-zero exit code skips the run silently (no worktree, no agent, no notification). Use it to check whether there is work to do before spending a run.",
+          ),
           maxRuns: z.number().int().positive().optional(),
           expiresIn: scheduleDurationInputSchema.optional(),
         })
         .superRefine(addScheduleCadenceIssue),
       outputSchema: ScheduleSummarySchema.shape,
     },
-    async ({ prompt, cron, timezone, name, provider, cwd, isolation, maxRuns, expiresIn }) => {
+    async ({
+      prompt,
+      cron,
+      timezone,
+      name,
+      provider,
+      cwd,
+      isolation,
+      gate,
+      maxRuns,
+      expiresIn,
+    }) => {
       if (!scheduleService) {
         throw new Error("Schedule service is not configured");
       }
@@ -2707,6 +2728,7 @@ function createToolCatalog(
         }),
         target: resolveNewAgentScheduleTarget({ provider, cwd, isolation }),
         ...(name?.trim() ? { name: name.trim() } : {}),
+        ...(gate?.trim() ? { gate: gate.trim() } : {}),
         ...(maxRuns === undefined ? {} : { maxRuns }),
         ...(expiresAt === undefined ? {} : { expiresAt }),
       });
@@ -2964,6 +2986,15 @@ function createToolCatalog(
             .optional()
             .describe("New mode for new-agent target (null to clear)."),
           cwd: z.string().trim().min(1).optional().describe("New cwd for new-agent target."),
+          gate: z
+            .string()
+            .trim()
+            .min(1)
+            .nullable()
+            .optional()
+            .describe(
+              "New gate command run before each run; non-zero exit skips the run silently (null to clear).",
+            ),
           expiresIn: scheduleDurationInputSchema
             .optional()
             .describe("New relative expiry duration (for example: 1h, 2d)."),

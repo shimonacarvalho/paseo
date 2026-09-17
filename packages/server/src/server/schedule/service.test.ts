@@ -723,6 +723,84 @@ describe("ScheduleService", () => {
     );
   });
 
+  test("runs a new-agent schedule when the gate command exits zero", async () => {
+    const manager = new AgentManager({
+      logger: createTestLogger(),
+      clients: createTestAgentClients(),
+      registry: agentStorage,
+    });
+    const service = createScheduleService({
+      paseoHome: tempDir,
+      logger: createTestLogger(),
+      agentManager: manager,
+      agentStorage,
+      providerSnapshotManager: NO_UNATTENDED_SCHEDULE_POLICY,
+      now: () => now,
+    });
+
+    const created = await service.create({
+      prompt: "Respond with exactly hello",
+      cadence: { type: "every", everyMs: 60_000 },
+      target: {
+        type: "new-agent",
+        config: { provider: "claude", model: "test-model", cwd: tempDir },
+      },
+      gate: "exit 0",
+      maxRuns: 1,
+    });
+
+    now = new Date("2026-01-01T00:01:00.000Z");
+    await service.tick();
+
+    const inspected = await service.inspect(created.id);
+    expect(inspected.runs).toHaveLength(1);
+    expect(inspected.runs[0]?.status).toBe("succeeded");
+  });
+
+  test("skips a new-agent run when the gate exits non-zero, creating no workspace", async () => {
+    const manager = new AgentManager({
+      logger: createTestLogger(),
+      clients: createTestAgentClients(),
+      registry: agentStorage,
+    });
+    const createWorkspaceSpy = vi.fn();
+    const createAgentSpy = vi.spyOn(manager, "createAgent");
+    const service = createScheduleService({
+      paseoHome: tempDir,
+      logger: createTestLogger(),
+      agentManager: manager,
+      agentStorage,
+      providerSnapshotManager: NO_UNATTENDED_SCHEDULE_POLICY,
+      now: () => now,
+      createDirectoryWorkspace:
+        createWorkspaceSpy as unknown as ScheduleServiceOptions["createDirectoryWorkspace"],
+    });
+
+    const created = await service.create({
+      prompt: "Do work if there is any",
+      cadence: { type: "every", everyMs: 60_000 },
+      target: {
+        type: "new-agent",
+        config: { provider: "claude", model: "test-model", cwd: tempDir },
+      },
+      gate: "exit 3",
+      maxRuns: 1,
+    });
+
+    now = new Date("2026-01-01T00:01:00.000Z");
+    await service.tick();
+
+    const inspected = await service.inspect(created.id);
+    expect(inspected.runs).toHaveLength(1);
+    expect(inspected.runs[0]?.status).toBe("skipped");
+    expect(inspected.runs[0]?.agentId).toBeNull();
+    expect(createWorkspaceSpy).not.toHaveBeenCalled();
+    expect(createAgentSpy).not.toHaveBeenCalled();
+    // A skipped run does not burn the maxRuns budget, so the schedule keeps ticking.
+    expect(inspected.status).toBe("active");
+    expect(inspected.nextRunAt).not.toBeNull();
+  });
+
   test("delivers agent-target schedules through the steer-or-interrupt path", async () => {
     const manager = new AgentManager({
       logger: createTestLogger(),

@@ -942,6 +942,7 @@ export interface CreateScheduleOptions {
           mcpServers?: AgentSessionConfig["mcpServers"];
         };
       };
+  gate?: string;
   maxRuns?: number;
   expiresAt?: string;
   runOnCreate?: boolean;
@@ -970,6 +971,7 @@ export interface UpdateScheduleOptions {
     timezone?: string;
   };
   newAgentConfig?: UpdateScheduleNewAgentConfig;
+  gate?: string | null;
   maxRuns?: number | null;
   expiresAt?: string | null;
   requestId?: string;
@@ -7127,6 +7129,7 @@ export class DaemonClient {
         cadence: options.cadence,
         target: options.target,
         ...(options.name ? { name: options.name } : {}),
+        ...(options.gate ? { gate: options.gate } : {}),
         ...(typeof options.maxRuns === "number" ? { maxRuns: options.maxRuns } : {}),
         ...(options.expiresAt ? { expiresAt: options.expiresAt } : {}),
         ...(typeof options.runOnCreate === "boolean" ? { runOnCreate: options.runOnCreate } : {}),
@@ -7221,6 +7224,7 @@ export class DaemonClient {
         ...(options.prompt !== undefined ? { prompt: options.prompt } : {}),
         ...(options.cadence !== undefined ? { cadence: options.cadence } : {}),
         ...(options.newAgentConfig !== undefined ? { newAgentConfig: options.newAgentConfig } : {}),
+        ...(options.gate !== undefined ? { gate: options.gate } : {}),
         ...(options.maxRuns !== undefined ? { maxRuns: options.maxRuns } : {}),
         ...(options.expiresAt !== undefined ? { expiresAt: options.expiresAt } : {}),
       },

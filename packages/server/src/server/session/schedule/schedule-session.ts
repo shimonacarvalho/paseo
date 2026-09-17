@@ -77,6 +77,7 @@ export class ScheduleSession {
         name: request.name,
         cadence: request.cadence,
         target,
+        gate: request.gate,
         maxRuns: request.maxRuns,
         expiresAt: request.expiresAt,
         runOnCreate: request.runOnCreate,
@@ -230,6 +231,7 @@ export class ScheduleSession {
         ...(request.prompt !== undefined ? { prompt: request.prompt } : {}),
         ...(request.cadence !== undefined ? { cadence: request.cadence } : {}),
         ...(request.newAgentConfig !== undefined ? { newAgentConfig: request.newAgentConfig } : {}),
+        ...(request.gate !== undefined ? { gate: request.gate } : {}),
         ...(request.maxRuns !== undefined ? { maxRuns: request.maxRuns } : {}),
         ...(request.expiresAt !== undefined ? { expiresAt: request.expiresAt } : {}),
       });

@@ -1,4 +1,5 @@
 import { formatSystemNotificationPrompt } from "../agent/agent-messages/index.js";
+import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { stat } from "node:fs/promises";
 import { join } from "node:path";
@@ -63,6 +64,50 @@ function advanceNextRunAtPast(
     next = computeNextRunAt(cadence, next);
   }
   return next;
+}
+
+// A run's gate command exited non-zero, meaning "there is no work to do". The
+// run is skipped before any worktree or agent is created, so it produces no
+// notification. Skipped runs do not count against maxRuns and do not fail the
+// schedule; the cadence advances normally to the next tick.
+export class ScheduleRunSkippedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ScheduleRunSkippedError";
+  }
+}
+
+// How long a gate command may run before it is killed and the run is treated as
+// a failure (surfaced, not silently skipped, so a broken gate is visible).
+const GATE_TIMEOUT_MS = 60_000;
+
+// Run a schedule's gate command in `cwd` and resolve its exit code. A signal
+// kill (including the timeout) resolves as a non-zero code so the caller skips
+// the run; a spawn failure rejects so the run is recorded as failed.
+function runGateCommand(gate: string, cwd: string, env: Record<string, string>): Promise<number> {
+  return new Promise<number>((resolve, reject) => {
+    const child = spawn(gate, {
+      cwd,
+      shell: true,
+      env: { ...process.env, ...env },
+      stdio: "ignore",
+    });
+    const timer = setTimeout(() => {
+      child.kill("SIGKILL");
+      reject(new Error(`Gate command timed out after ${GATE_TIMEOUT_MS}ms`));
+    }, GATE_TIMEOUT_MS);
+    timer.unref?.();
+    child.once("error", (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    child.once("close", (code, signal) => {
+      clearTimeout(timer);
+      // A signalled exit (other than our timeout, already rejected) counts as a
+      // non-zero result: treat it as "skip" rather than crash the tick loop.
+      resolve(code ?? (signal ? 1 : 0));
+    });
+  });
 }
 
 function trimOptionalName(value: string | null | undefined): string | null {
@@ -151,7 +196,9 @@ function normalizeMaxRuns(value: number | null | undefined): number | null {
 }
 
 function countCompletedRuns(schedule: StoredSchedule): number {
-  return schedule.runs.filter((run) => run.status !== "running").length;
+  // Skipped runs did no work (their gate said "nothing to do"), so they must not
+  // burn down a maxRuns budget meant to cap real executions.
+  return schedule.runs.filter((run) => run.status !== "running" && run.status !== "skipped").length;
 }
 
 function shouldArchiveScheduleRunWorkspace(input: {
@@ -352,6 +399,7 @@ export class ScheduleService {
       prompt: fields.prompt,
       cadence: input.cadence,
       target: fields.target,
+      gate: input.gate ?? null,
       status: "active",
       createdAt: now.toISOString(),
       updatedAt: now.toISOString(),
@@ -391,6 +439,7 @@ export class ScheduleService {
           prompt,
           cadence,
           target: inputTarget,
+          gate: input.gate === undefined ? current.gate : (input.gate ?? null),
           status: "active",
           pausedAt: null,
           nextRunAt: nextRunAt.toISOString(),
@@ -486,6 +535,10 @@ export class ScheduleService {
           ...updated,
           target: patchedTarget,
         };
+      }
+
+      if (input.gate !== undefined) {
+        updated = { ...updated, gate: input.gate ?? null };
       }
 
       if (input.maxRuns !== undefined) {
@@ -757,13 +810,15 @@ export class ScheduleService {
           manual,
         });
       } catch (error) {
+        const skipped = error instanceof ScheduleRunSkippedError;
+        const failureMessage = error instanceof Error ? error.message : String(error);
         await this.finishRun({
           scheduleId: schedule.id,
           runId,
-          status: "failed",
+          status: skipped ? "skipped" : "failed",
           agentId: null,
-          output: null,
-          error: error instanceof Error ? error.message : String(error),
+          output: skipped ? error.message : null,
+          error: skipped ? null : failureMessage,
           targetGone: error instanceof ScheduleTargetGoneError,
           manual,
         });
@@ -840,7 +895,7 @@ export class ScheduleService {
   private async finishRun(params: {
     scheduleId: string;
     runId: string;
-    status: "succeeded" | "failed";
+    status: "succeeded" | "failed" | "skipped";
     agentId: string | null;
     output: string | null;
     error: string | null;
@@ -975,6 +1030,9 @@ export class ScheduleService {
       throw new Error(`Schedule ${schedule.id} target changed during execution`);
     }
     await this.assertNewAgentCwdDirectory(config.cwd);
+    // Gate runs before any worktree or agent is created: if it says there is no
+    // work to do, the run is skipped silently with nothing spun up.
+    await this.evaluateGate(schedule, config.cwd, runId);
     let workspace: PersistedWorkspaceRecord | null = null;
     let agentId: string | null = null;
     try {
@@ -1056,6 +1114,26 @@ export class ScheduleService {
           );
         }
       }
+    }
+  }
+
+  // Run the schedule's gate command, if any, before deciding to create a
+  // worktree or start an agent. A non-zero exit means "no work to do": throw
+  // ScheduleRunSkippedError so the run is recorded as skipped and stays silent.
+  private async evaluateGate(schedule: StoredSchedule, cwd: string, runId: string): Promise<void> {
+    const gate = schedule.gate;
+    if (!gate) {
+      return;
+    }
+    const exitCode = await runGateCommand(gate, cwd, {
+      PASEO_SCHEDULE_ID: schedule.id,
+      PASEO_SCHEDULE_RUN: runId,
+      PASEO_SCHEDULE_NAME: schedule.name ?? "",
+      PASEO_SCHEDULE_PROMPT: schedule.prompt,
+    });
+    if (exitCode !== 0) {
+      this.logger.info({ scheduleId: schedule.id, runId, exitCode }, "Schedule gate skipped run");
+      throw new ScheduleRunSkippedError(`Gate exited ${exitCode}; nothing to do`);
     }
   }
 

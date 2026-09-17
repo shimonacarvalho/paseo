@@ -81,6 +81,7 @@ export interface CreateScheduleInput {
   name?: string;
   cadence: ScheduleCadence;
   target: ScheduleTarget;
+  gate?: string;
   maxRuns?: number;
   expiresAt?: string;
   runOnCreate?: boolean;
@@ -147,6 +148,7 @@ export interface UpdateScheduleInput {
   prompt?: string;
   cadence?: ScheduleCadence;
   newAgentConfig?: UpdateScheduleNewAgentConfig;
+  gate?: string | null;
   maxRuns?: number | null;
   expiresAt?: string | null;
 }

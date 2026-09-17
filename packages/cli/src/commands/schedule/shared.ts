@@ -148,6 +148,7 @@ export function parseScheduleCreateInput(options: {
   mode?: string;
   thinking?: string;
   cwd?: string;
+  gate?: string;
   host?: string;
   daemonTarget: import("../../utils/daemon-target.js").DaemonTarget;
   maxRuns?: string;
@@ -225,9 +226,23 @@ export function parseScheduleCreateInput(options: {
     cadence,
     target,
     runOnCreate,
-    ...(options.name?.trim() ? { name: options.name.trim() } : {}),
-    ...(maxRuns !== undefined ? { maxRuns } : {}),
-    ...(expiresAt ? { expiresAt } : {}),
+    ...buildOptionalCreateFields({ name: options.name, gate: options.gate, maxRuns, expiresAt }),
+  };
+}
+
+function buildOptionalCreateFields(input: {
+  name?: string;
+  gate?: string;
+  maxRuns?: number;
+  expiresAt?: string;
+}): Pick<Partial<CreateScheduleInput>, "name" | "gate" | "maxRuns" | "expiresAt"> {
+  const name = input.name?.trim();
+  const gate = input.gate?.trim();
+  return {
+    ...(name ? { name } : {}),
+    ...(gate ? { gate } : {}),
+    ...(input.maxRuns !== undefined ? { maxRuns: input.maxRuns } : {}),
+    ...(input.expiresAt ? { expiresAt: input.expiresAt } : {}),
   };
 }
 
@@ -249,10 +264,12 @@ export interface ScheduleUpdateOptionsInput {
   model?: string;
   mode?: string;
   cwd?: string;
+  gate?: string;
   maxRuns?: string;
   expiresIn?: string;
   clearMaxRuns?: boolean;
   clearExpires?: boolean;
+  clearGate?: boolean;
 }
 
 export function parseScheduleUpdateInput(options: ScheduleUpdateOptionsInput): UpdateScheduleInput {
@@ -270,12 +287,14 @@ export function parseScheduleUpdateInput(options: ScheduleUpdateOptionsInput): U
   const expiresAt = parseUpdateExpiresAt(options);
   const name = parseUpdateName(options);
   const prompt = parseUpdatePrompt(options);
+  const gate = parseUpdateGate(options);
 
   if (
     name === undefined &&
     prompt === undefined &&
     cadence === undefined &&
     newAgentConfig === undefined &&
+    gate === undefined &&
     maxRuns === undefined &&
     expiresAt === undefined
   ) {
@@ -291,6 +310,7 @@ export function parseScheduleUpdateInput(options: ScheduleUpdateOptionsInput): U
     ...(prompt !== undefined ? { prompt } : {}),
     ...(cadence !== undefined ? { cadence } : {}),
     ...(newAgentConfig !== undefined ? { newAgentConfig } : {}),
+    ...(gate !== undefined ? { gate } : {}),
     ...(maxRuns !== undefined ? { maxRuns } : {}),
     ...(expiresAt !== undefined ? { expiresAt } : {}),
   };
@@ -383,6 +403,29 @@ function parseUpdateExpiresAt(options: ScheduleUpdateOptionsInput): string | nul
   }
   if (options.expiresIn !== undefined) {
     return new Date(Date.now() + parseDuration(options.expiresIn)).toISOString();
+  }
+  return undefined;
+}
+
+function parseUpdateGate(options: ScheduleUpdateOptionsInput): string | null | undefined {
+  if (options.gate !== undefined && options.clearGate) {
+    throw {
+      code: "CONFLICTING_GATE",
+      message: "Use either --gate <command> or --no-gate, not both",
+    } satisfies CommandError;
+  }
+  if (options.clearGate) {
+    return null;
+  }
+  if (options.gate !== undefined) {
+    const trimmed = options.gate.trim();
+    if (!trimmed) {
+      throw {
+        code: "INVALID_GATE",
+        message: "--gate cannot be empty",
+      } satisfies CommandError;
+    }
+    return trimmed;
   }
   return undefined;
 }

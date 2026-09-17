@@ -64,6 +64,30 @@ paseo schedule create \
   "Review overnight CI failures and summarize anything urgent."
 ```
 
+## Gate: skip runs with no work
+
+Pass `--gate <command>` to run a check before each run decides to create a
+worktree or start an agent. The command runs in the schedule's `--cwd`; a
+non-zero exit code **skips the run silently** — no worktree, no agent, and no
+notification — recorded as a `skipped` run. Skipped runs do not count against
+`--max-runs`, and the cadence advances to the next tick as usual.
+
+```bash
+paseo schedule create \
+  --every 30m \
+  --name ticket-worker \
+  --provider codex/gpt-5.5 \
+  --cwd ~/dev/my-app \
+  --gate "test -n \"$(gh issue list --label ready --json number -q '.[].number')\"" \
+  "Pick up the next ready ticket and work it."
+```
+
+The gate command sees `PASEO_SCHEDULE_ID`, `PASEO_SCHEDULE_RUN`,
+`PASEO_SCHEDULE_NAME`, and `PASEO_SCHEDULE_PROMPT` in its environment. A gate
+that runs longer than 60s is killed and the run is recorded as failed (so a
+broken gate stays visible rather than silently skipping). Clear a gate with
+`paseo schedule update <id> --no-gate`.
+
 ## Heartbeats
 
 Inside a running Paseo agent, create a heartbeat for that same conversation:
