@@ -84,6 +84,7 @@
     "acp:version-drift:check": "node scripts/check-acp-catalog-version-drift.mjs --fail-on-drift",
     "acp:version-drift:update": "node scripts/check-acp-catalog-version-drift.mjs --update",
     "start": "npm run start --workspace=@getpaseo/server",
+    "daemon:start": "npm run build:server && node packages/cli/dist/index.js daemon start",
     "android": "npm run dev:android",
     "android:development": "npm run android:development --workspace=@getpaseo/app",
     "android:production": "npm run android:production --workspace=@getpaseo/app",

@@ -792,7 +792,8 @@ describe("ScheduleService", () => {
 
     const inspected = await service.inspect(created.id);
     expect(inspected.runs).toHaveLength(1);
-    expect(inspected.runs[0]?.status).toBe("skipped");
+    expect(inspected.runs[0]?.status).toBe("succeeded");
+    expect(inspected.runs[0]?.skipped).toBe(true);
     expect(inspected.runs[0]?.agentId).toBeNull();
     expect(createWorkspaceSpy).not.toHaveBeenCalled();
     expect(createAgentSpy).not.toHaveBeenCalled();

@@ -198,7 +198,7 @@ function normalizeMaxRuns(value: number | null | undefined): number | null {
 function countCompletedRuns(schedule: StoredSchedule): number {
   // Skipped runs did no work (their gate said "nothing to do"), so they must not
   // burn down a maxRuns budget meant to cap real executions.
-  return schedule.runs.filter((run) => run.status !== "running" && run.status !== "skipped").length;
+  return schedule.runs.filter((run) => run.status !== "running" && run.skipped !== true).length;
 }
 
 function shouldArchiveScheduleRunWorkspace(input: {
@@ -815,7 +815,8 @@ export class ScheduleService {
         await this.finishRun({
           scheduleId: schedule.id,
           runId,
-          status: skipped ? "skipped" : "failed",
+          status: skipped ? "succeeded" : "failed",
+          skipped,
           agentId: null,
           output: skipped ? error.message : null,
           error: skipped ? null : failureMessage,
@@ -895,7 +896,8 @@ export class ScheduleService {
   private async finishRun(params: {
     scheduleId: string;
     runId: string;
-    status: "succeeded" | "failed" | "skipped";
+    status: "succeeded" | "failed";
+    skipped?: boolean;
     agentId: string | null;
     output: string | null;
     error: string | null;
@@ -909,6 +911,7 @@ export class ScheduleService {
           ? {
               ...run,
               status: params.status,
+              ...(params.skipped ? { skipped: true } : {}),
               endedAt: now.toISOString(),
               agentId: params.agentId ?? run.agentId,
               output: params.output,

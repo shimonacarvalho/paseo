@@ -48,7 +48,10 @@ export const ScheduleRunSchema = z.object({
   scheduledFor: z.string(),
   startedAt: z.string(),
   endedAt: z.string().nullable(),
-  status: z.enum(["running", "succeeded", "failed", "skipped"]),
+  status: z.enum(["running", "succeeded", "failed"]),
+  // COMPAT(scheduleRunSkipped): added in v0.8.0, remove only after every supported
+  // client accepts a skipped status. Keep status wire-compatible with older apps.
+  skipped: z.boolean().optional(),
   agentId: z.guid().nullable(),
   workspaceId: z.string().nullable().optional(),
   output: z.string().nullable(),
