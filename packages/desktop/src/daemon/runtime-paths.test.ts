@@ -69,4 +69,35 @@ describe("runtime-paths", () => {
       "/Applications/Paseo.app/Contents/Frameworks/Paseo Helper.app/Contents/MacOS/Paseo Helper",
     );
   });
+
+  it("uses the macOS Helper executable for unpackaged (dev) node launches", () => {
+    mocks.app.isPackaged = false;
+    setProcessRuntime({
+      platform: "darwin",
+      execPath:
+        "/Users/shimona/repos/paseo/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron",
+      resourcesPath:
+        "/Users/shimona/repos/paseo/node_modules/electron/dist/Electron.app/Contents/Resources",
+    });
+
+    expect(resolveNodeExecPath()).toBe(
+      "/Users/shimona/repos/paseo/node_modules/electron/dist/Electron.app/Contents/Frameworks/Electron Helper.app/Contents/MacOS/Electron Helper",
+    );
+  });
+
+  it("falls back to the Electron executable when no macOS Helper exists", () => {
+    mocks.app.isPackaged = false;
+    mocks.existsSync.mockReturnValue(false);
+    setProcessRuntime({
+      platform: "darwin",
+      execPath:
+        "/Users/shimona/repos/paseo/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron",
+      resourcesPath:
+        "/Users/shimona/repos/paseo/node_modules/electron/dist/Electron.app/Contents/Resources",
+    });
+
+    expect(resolveNodeExecPath()).toBe(
+      "/Users/shimona/repos/paseo/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron",
+    );
+  });
 });
