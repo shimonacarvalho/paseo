@@ -2689,14 +2689,14 @@ function createToolCatalog(
           ),
           cwd: z.string().optional(),
           isolation: z.enum(["local", "worktree"]).optional(),
-        gate: z
-          .string()
-          .trim()
-          .min(1)
-          .optional()
-          .describe(
-            "Shell command run in the schedule's cwd before each run. A non-zero exit code skips the run silently (no worktree, no agent, no notification). Use it to check whether there is work to do before spending a run.",
-          ),
+          gate: z
+            .string()
+            .trim()
+            .min(1)
+            .optional()
+            .describe(
+              "Shell command run in the schedule's cwd before each run. A non-zero exit code skips the run silently (no worktree, no agent, no notification). Use it to check whether there is work to do before spending a run.",
+            ),
           maxRuns: z.number().int().positive().optional(),
           expiresIn: scheduleDurationInputSchema.optional(),
         })
